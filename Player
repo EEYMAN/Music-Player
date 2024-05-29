@@ -1,0 +1,171 @@
+//
+//  ContentView.swift
+//  SliderswiftUI
+//
+//  Created by Alexandr on 28.02.2024.
+//
+
+import AVFoundation
+import SwiftUI
+
+class PlayerViewModel: ObservableObject {
+    @Published public var maxDuration = 0.0
+    @Published public var currentTime = 0.0
+    @Published public var isPlaying = false
+    @Published public var currentTrackIndex = 0
+    
+    private var player: AVAudioPlayer?
+    private var timer: Timer?
+    
+    let tracks = ["Lady Gaga - Poker Face", "P!NK – Funhouse", "Sabrina Carpenter - Espresso", "liam_payne_feat_quavo"]
+    
+    public func play() {
+        if player == nil || player?.url?.lastPathComponent != tracks[currentTrackIndex] {
+            playSound(name: tracks[currentTrackIndex])
+        }
+        player?.play()
+        startTimer()
+        isPlaying = true
+    }
+    
+    public func stop() {
+        player?.stop()
+        stopTimer()
+        isPlaying = false
+    }
+    
+    public func nextTrack() {
+        stop()
+        currentTrackIndex = (currentTrackIndex + 1) % tracks.count
+        play()
+    }
+    
+    public func previousTrack() {
+        stop()
+        currentTrackIndex = (currentTrackIndex - 1 + tracks.count) % tracks.count
+        play()
+    }
+    
+    public func setTime(value: Float) {
+        guard let time = TimeInterval(exactly: value) else { return }
+        player?.currentTime = time
+        player?.play()
+        isPlaying = true
+    }
+    
+    private func playSound(name: String) {
+        guard let audioPath = Bundle.main.path(forResource: name, ofType: "mp3") else { return }
+        do {
+            try player = AVAudioPlayer(contentsOf: URL(fileURLWithPath: audioPath))
+            maxDuration = player?.duration ?? 0.0
+        } catch {
+            print(error.localizedDescription)
+        }
+    }
+    
+    private func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            self.updateCurrentTime()
+        }
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+    
+    private func updateCurrentTime() {
+        guard let player = player else { return }
+        currentTime = player.currentTime
+    }
+    
+    var elapsedTime: String {
+        let minutes = Int(currentTime) / 60
+        let seconds = Int(currentTime) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    var remainingTime: String {
+        let remaining = maxDuration - currentTime
+        let minutes = Int(remaining) / 60
+        let seconds = Int(remaining) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    var currentTrackName: String {
+        return tracks[currentTrackIndex]
+    }
+}
+
+struct ContentView: View {
+    @ObservedObject var viewModel = PlayerViewModel()
+    
+    var body: some View {
+        VStack {
+            Text("\(viewModel.currentTrackName)")
+                .font(.title)
+                .padding(.bottom, 10)
+            
+            Slider(value: Binding(get: {
+                Double(self.viewModel.currentTime)
+            }, set: { newValue in
+                self.viewModel.setTime(value: Float(newValue))
+            }), in: 0...viewModel.maxDuration)
+            .padding()
+            
+            HStack {
+                Button(action: {
+                    self.viewModel.previousTrack()
+                }, label: {
+                    Text("<<")
+                        .foregroundColor(.white)
+                })
+                .frame(width: 100, height: 50)
+                .background(Color.purple)
+                .cornerRadius(10)
+                
+                Button(action: {
+                    if self.viewModel.isPlaying {
+                        self.viewModel.stop()
+                    } else {
+                        self.viewModel.play()
+                    }
+                }, label: {
+                    Text(self.viewModel.isPlaying ? "||" : ">")
+                        .foregroundColor(.white)
+                })
+                .frame(width: 100, height: 50)
+                .background(Color.pink)
+                .cornerRadius(10)
+                
+                Button(action: {
+                    self.viewModel.nextTrack()
+                }, label: {
+                    Text(">>")
+                        .foregroundColor(.white)
+                })
+                .frame(width: 100, height: 50)
+                .background(Color.purple)
+                .cornerRadius(10)
+            }
+            .padding()
+            
+            HStack {
+                Text("\(viewModel.elapsedTime)")
+                Spacer()
+                Text("\(viewModel.remainingTime)")
+            }
+            .padding()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.gray.opacity(0.2))
+        .edgesIgnoringSafeArea(.all)
+    }
+}
+
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
+}
